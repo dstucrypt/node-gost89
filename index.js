@@ -31,6 +31,35 @@ Hash.init = function () {
     return new Hash();
 };
 
+var Gost = function () {
+    this.ctx = binding.init();
+};
+
+Gost.prototype.key = function (key) {
+    this.ctx.key(key);
+};
+
+Gost.prototype.crypt = function (data, out) {
+    this.ctx.crypt(data, out, 0);
+};
+
+Gost.prototype.decrypt = function (data, out) {
+    this.ctx.crypt(data, out, 1);
+};
+
+Gost.prototype.crypt_cfb = function (iv, data, out) {
+    this.ctx.crypt(data, out, 2, iv);
+};
+
+Gost.prototype.decrypt_cfb = function (iv, data, out) {
+    this.ctx.crypt(data, out, 3, iv);
+};
+
+Gost.init = function () {
+    return new Gost();
+};
+
 module.exports.Hash = {
     init: Hash.init,
 };
+module.exports.init = Gost.init;
