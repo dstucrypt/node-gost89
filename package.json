@@ -1,0 +1,22 @@
+{
+  "name": "node-gost89",
+  "version": "0.1.0",
+  "description": "Gost89 native module",
+  "author": "Ilya Petrov",
+  "contributors": [],
+  "engines": {
+    "node": ">=0.3.0"
+  },
+  "url": "https://github.com/dstucrypt/node-gost89",
+  "keywords": [
+    "crypto"
+  ],
+  "main": "./index",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dstucrypt/node-gost89.git"
+  },
+  "scripts": {
+    "install": "node-gyp configure build"
+  }
+}
