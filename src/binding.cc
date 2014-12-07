@@ -167,7 +167,7 @@ Handle<Value> GostCrypt(const Arguments &args) {
     op = mode->Value();
 
     size_t length;
-    byte *iv;
+    byte *iv = NULL;
 
     if(op == 2 || op == 3) {
         Local<Object>ivbuf;
