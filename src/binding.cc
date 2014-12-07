@@ -5,9 +5,8 @@
 
 extern "C" {
 #include "gost89.h"
-#include "gosthash.h"
 #include "sbox.h"
-#include "hash.h"
+#include "gosthash.h"
 }
 
 using namespace v8;
@@ -61,6 +60,20 @@ Handle<Value> HashFinish(const Arguments &args) {
     return scope.Close(Undefined());
 }
 
+Handle<Value> HashReset(const Arguments &args) {
+    HandleScope scope;
+    Local<Object> self = args.Holder();
+    Local<External> wrap = Local<External>::Cast(self->GetInternalField(0));
+    gost_hash_ctx *hash_ctx = (gost_hash_ctx*)wrap->Value();
+    int err = start_hash(hash_ctx);
+    if(err != 1) {
+        return ThrowException(Exception::TypeError(String::New(
+            "Internal error in gost89 hashing")));
+    }
+
+    return scope.Close(Undefined());
+}
+
 void gost_hash_free_cb(Persistent<Value> object, void *parameter) {
     gost_hash_ctx *hash_ctx = (gost_hash_ctx *)parameter;
     done_gost_hash_ctx(hash_ctx);
@@ -90,6 +103,9 @@ Handle<Value> HashInit(const Arguments &args) {
 
     obj->Set(String::NewSymbol("finish"),
             FunctionTemplate::New(HashFinish)->GetFunction());
+
+    obj->Set(String::NewSymbol("reset"),
+            FunctionTemplate::New(HashReset)->GetFunction());
 
     obj->SetInternalField(0, External::New(hash_ctx));
 
@@ -203,6 +219,44 @@ Handle<Value> GostCrypt(const Arguments &args) {
     return scope.Close(Undefined());
 }
 
+Handle<Value> GostMac(const Arguments &args) {
+    HandleScope scope;
+
+    if (!Buffer::HasInstance(args[0])) {
+        return ThrowException(Exception::TypeError(String::New(
+            "First argument must be a Buffer")));
+    }
+    if (!Buffer::HasInstance(args[1])) {
+        return ThrowException(Exception::TypeError(String::New(
+            "Second argument must be a Buffer")));
+    }
+    if (!args[2]->IsInt32()) {
+        return ThrowException(Exception::TypeError(String::New(
+            "Third argument must be an Integer")));
+    }
+    Local<Object> buf = args[0]->ToObject();
+    Local<Object> obuf = args[1]->ToObject();
+    Local<Integer> lbits = Local<Integer>::Cast(args[2]);
+
+    int bits = lbits->Value();
+    int length = Buffer::Length(buf);
+    int mac_length = Buffer::Length(obuf);
+    if (mac_length * 8 != bits) {
+        return ThrowException(Exception::TypeError(String::New(
+            "Output buffer should be equal to requested mac size"
+        )));
+    }
+    byte *data = (byte *)Buffer::Data(buf);
+    byte *odata = (byte *)Buffer::Data(obuf);
+
+    Local<Object> self = args.Holder();
+    Local<External> wrap = Local<External>::Cast(self->GetInternalField(0));
+    gost_ctx *ctx = (gost_ctx*)wrap->Value();
+    gost_mac(ctx, bits, data, length, odata);
+
+    return scope.Close(Undefined());
+}
+
 void gost_free_cb(Persistent<Value> object, void *parameter) {
     gost_ctx *ctx = (gost_ctx *)parameter;
     gost_destroy(ctx);
@@ -232,6 +286,9 @@ Handle<Value> Init(const Arguments &args) {
     obj->Set(String::NewSymbol("crypt"),
             FunctionTemplate::New(GostCrypt)->GetFunction());
 
+    obj->Set(String::NewSymbol("mac"),
+            FunctionTemplate::New(GostMac)->GetFunction());
+
     obj->SetInternalField(0, External::New(ctx));
 
     obj.MakeWeak(ctx, gost_free_cb);
@@ -239,42 +296,9 @@ Handle<Value> Init(const Arguments &args) {
     return scope.Close(obj);
 }
 
-Handle<Value> GostHash(const Arguments &args) {
-  HandleScope scope;
-  if (!Buffer::HasInstance(args[0])) {
-    return ThrowException(Exception::TypeError(String::New(
-            "First argument must be a Buffer")));
-  }
-
-  if (!Buffer::HasInstance(args[1])) {
-    return ThrowException(Exception::TypeError(String::New(
-            "Second argument must be a Buffer")));
-  }
-
-  Local<Object> buf = args[0]->ToObject();
-  Local<Object> hbuf = args[1]->ToObject();
-
-  if (Buffer::Length(hbuf) != 32) {
-    return ThrowException(Exception::TypeError(String::New(
-            "Second argument must be a Buffer of 32 bytes")));
-
-  }
-
-  byte *data = (byte *)Buffer::Data(buf);
-  size_t length = Buffer::Length(buf);
-
-  byte *out = (byte *)Buffer::Data(hbuf);
-
-  length = compute_hash((const byte*)data, length, out);
-
-  return scope.Close(Integer::NewFromUnsigned(length));
-}
-
 extern "C"
 void init(Handle<Object> target) {
   HandleScope scope;
-  target->Set(String::NewSymbol("gosthash"),
-          FunctionTemplate::New(GostHash)->GetFunction());
   target->Set(String::NewSymbol("hashinit"),
           FunctionTemplate::New(HashInit)->GetFunction());
   target->Set(String::NewSymbol("init"),
